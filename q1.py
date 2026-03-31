@@ -598,15 +598,86 @@ def compute_metrics(step_rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
     # TODO ── your implementation here ──────────────────────────────────────
     # Step 1: extract true_scores and pred_scores as lists from step_rows.
+    true_scores = [int(row["true_score"]) for row in step_rows]
+    pred_scores = [int(row["estimated_score"]) for row in step_rows]
+    
+    if not true_scores:
+        return {
+            "n_compared_scores": 0,
+            "accuracy": 0.0,
+            "adjacent_accuracy": 0.0,
+            "mean_absolute_error": 0.0,
+            "quadratic_weighted_kappa": 0.0,
+        }
+
     #
     # Step 2: compute your chosen metric(s).
+    n = len(true_scores)
+    exact_matches = sum(
+        1 for true_score, pred_score in zip(true_scores, pred_scores)
+        if true_score == pred_score
+    )
+    adjacent_matches = sum(
+        1 for true_score, pred_score in zip(true_scores, pred_scores)
+        if abs(true_score - pred_score) <= 1
+    )
+    mean_absolute_error = sum(
+        abs(true_score - pred_score)
+        for true_score, pred_score in zip(true_scores, pred_scores)
+    ) / n
+
+    labels = [1, 2, 3, 4]
+    observed_counts = {
+        true_label: {pred_label: 0 for pred_label in labels}
+        for true_label in labels
+    }
+    for true_score, pred_score in zip(true_scores, pred_scores):
+        observed_counts[true_score][pred_score] += 1
+
+    true_marginals = {
+        label: sum(1 for score in true_scores if score == label)
+        for label in labels
+    }
+    pred_marginals = {
+        label: sum(1 for score in pred_scores if score == label)
+        for label in labels
+    }
+
+    min_label = min(labels)
+    max_label = max(labels)
+    scale_width = max_label - min_label
+
+    weighted_observed = 0.0
+    weighted_expected = 0.0
+    for true_label in labels:
+        for pred_label in labels:
+            weight = ((true_label - pred_label) / scale_width) ** 2
+            observed = observed_counts[true_label][pred_label] / n
+            expected = (
+                true_marginals[true_label] * pred_marginals[pred_label]
+            ) / (n * n)
+            weighted_observed += weight * observed
+            weighted_expected += weight * expected
+
+    quadratic_weighted_kappa = (
+        1.0 - (weighted_observed / weighted_expected)
+        if weighted_expected > 0
+        else 1.0
+    )
+
     #
     # Step 3: return a dict, e.g.:
     #   return {
     #       "metricA": ...,
     #       "metricB": ...,
     #   }
-    raise NotImplementedError("Implement compute_metrics()")
+    return {
+        "n_compared_scores": n,
+        "accuracy": round(exact_matches / n, 4),
+        "adjacent_accuracy": round(adjacent_matches / n, 4),
+        "mean_absolute_error": round(mean_absolute_error, 4),
+        "quadratic_weighted_kappa": round(quadratic_weighted_kappa, 4),
+    }
 
 
 def evaluate_predictions(
@@ -716,7 +787,7 @@ if __name__ == "__main__":
     )
 
     # Step 2: validate your prompt on the labeled test set
-    # run_test_pipeline(LABELED_CONFIG)
+    run_test_pipeline(LABELED_CONFIG)
 
     # Step 4: score all unlabeled clients (only after prompt is validated)
     # run_unlabeled_pipeline(UNLABELED_CONFIG)

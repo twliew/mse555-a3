@@ -317,16 +317,42 @@ def build_prompt(notes_json_str: str) -> str:
         The complete prompt to send to the LLM.
     """
     # TODO ── your implementation here ──────────────────────────────────────
-    raise NotImplementedError("Implement build_prompt()")
+    return f"""
 
-    # Replace the raise above with your prompt, e.g.:
-    # return f"""
-    #
-    # Session notes:
-    # {notes_json_str}
-    #
-    # Return ONLY a JSON list...
-    # """
+    You are a senior speech-language pathologist reviewing a client's therapy progress across sessions.
+
+    Your task:
+    - Read the ordered session notes below.
+    - For every consecutive pair of notes (note N -> note N+1), assign exactly one integer progress score from 1 to 4 describing how the client changed from the earlier note to the later note.
+    - If there are N notes, return exactly N-1 scores.
+
+    Scoring rubric:
+    1 = Regression / deterioration.
+        The later note shows worse performance, more difficulty, more cueing/support needed, lower participation, or new concerns.
+    2 = Minimal, unclear, or mixed progress.
+        The later note is mostly similar to the prior one, improvement is slight or inconsistent, or gains are offset by setbacks.
+    3 = Clear moderate progress.
+        The later note shows noticeable improvement in accuracy, independence, participation, reduced cueing, or goal advancement, but not near mastery.
+    4 = Strong progress / major gain.
+        The later note shows substantial improvement, consistent success, near-mastery/mastery, or much less support needed.
+
+    Boundary rules:
+    - Score the CHANGE between consecutive notes, not the client's absolute severity.
+    - Use 2 rather than 3 when improvement is weak, uncertain, or inconsistent.
+    - Use 4 only for clearly substantial improvement; do not use it for ordinary progress.
+    - If the note pair provides limited evidence, choose the most conservative reasonable score.
+    - Base scores only on the information in the notes.
+
+    Output requirements:
+    - Return ONLY a JSON list of integers and nothing else.
+    - No markdown, no explanation, no labels, no extra keys.
+    - Example valid output: [2, 3, 2, 4]
+    
+    Session notes:
+    {notes_json_str}
+    
+    Return ONLY a JSON list...
+    """
 
 
 # ============================================================================

@@ -72,8 +72,8 @@ class BaseQ1Config:
 
 @dataclass
 class Q1ALabeledConfig(BaseQ1Config):
-    test_path: str = "data/test_notes.json"
-    evaluated_output_path: str = "outputs/evaluated_labeled_results.json"
+    test_path: str = "labeled_notes.json"
+    evaluated_output_path: str = "output/q1/evaluated_labeled_results.json"
 
 
 @dataclass
@@ -319,41 +319,50 @@ def build_prompt(notes_json_str: str) -> str:
     """
     # TODO ── your implementation here ──────────────────────────────────────
     return f"""
+    You are a senior speech-language pathologist scoring therapy progress between consecutive session notes.
 
-    You are a senior speech-language pathologist reviewing a client's therapy progress across sessions.
+    For each consecutive note pair (note N → note N+1), assign one integer score (1–4).
 
-    Your task:
-    - Read the ordered session notes below.
-    - For every consecutive pair of notes (note N -> note N+1), assign exactly one integer progress score from 1 to 4 describing how the client changed from the earlier note to the later note.
-    - If there are N notes, return exactly N-1 scores.
+    SCORING RUBRIC:
+    1 = Regression — later note shows worse performance, more errors, more cueing needed, lower participation, or new concerns raised.
+    2 = Minimal/unclear progress — similar performance, slight or inconsistent gains, or improvements offset by setbacks.
+    3 = Clear moderate progress — noticeable improvement in accuracy, independence, or reduced cueing, but not near mastery.
+    4 = Strong progress — substantial improvement, consistent success, near-mastery or mastery achieved, much less support needed.
 
-    Scoring rubric:
-    1 = Regression / deterioration.
-        The later note shows worse performance, more difficulty, more cueing/support needed, lower participation, or new concerns.
-    2 = Minimal, unclear, or mixed progress.
-        The later note is mostly similar to the prior one, improvement is slight or inconsistent, or gains are offset by setbacks.
-    3 = Clear moderate progress.
-        The later note shows noticeable improvement in accuracy, independence, participation, reduced cueing, or goal advancement, but not near mastery.
-    4 = Strong progress / major gain.
-        The later note shows substantial improvement, consistent success, near-mastery/mastery, or much less support needed.
+    FEW-SHOT EXAMPLES:
 
-    Boundary rules:
-    - Score the CHANGE between consecutive notes, not the client's absolute severity.
-    - Use 2 rather than 3 when improvement is weak, uncertain, or inconsistent.
-    - Use 4 only for clearly substantial improvement; do not use it for ordinary progress.
-    - If the note pair provides limited evidence, choose the most conservative reasonable score.
-    - Base scores only on the information in the notes.
+    Note A: "Client required maximum verbal cuing to produce /r/ in word-initial position. Accuracy ~20%. Frequent frustration noted."
+    Note B: "Client required maximum verbal cuing. Accuracy ~20-25%. Continues to show frustration with task."
+    Score: 2  ← nearly identical performance, marginal change
 
-    Output requirements:
-    - Return ONLY a JSON list of integers and nothing else.
-    - No markdown, no explanation, no labels, no extra keys.
-    - Example valid output: [2, 3, 2, 4]
-    
-    Session notes:
+    Note A: "Client produced target phoneme with moderate cuing, 40% accuracy in structured tasks."
+    Note B: "Client produced target phoneme with minimal cuing, 65% accuracy in structured tasks. Less prompting needed."
+    Score: 3  ← noticeable improvement, still not mastery
+
+    Note A: "Client struggles significantly with word retrieval. Required frequent phonemic cues. Sentence formulation incomplete."
+    Note B: "Client required more cues than last session. Word retrieval slower. Family reports increased difficulty at home."
+    Score: 1  ← regression
+
+    Note A: "Client at 60% accuracy with moderate cuing on multi-step directions."
+    Note B: "Client achieved 90% accuracy independently across structured and novel tasks. Cuing no longer needed."
+    Score: 4  ← major gain, near mastery
+
+    DECISION RULES (apply in order):
+    - If performance is worse in any meaningful way → lean 1
+    - If change is ambiguous, mixed, or negligible → default to 2, not 3
+    - Reserve 4 for clearly dramatic jumps (e.g., 30%+ accuracy gain, or elimination of cuing)
+    - Score the CHANGE, not absolute severity (a client at 20% accuracy can still get a 4 if they jumped from 5%)
+    - When in doubt between two adjacent scores, pick the lower one
+
+    OUTPUT FORMAT:
+    Return ONLY a JSON list of integers — no explanation, no markdown, no commentary.
+    If there are N notes, return exactly N-1 scores.
+    Valid example: [2, 3, 1, 4, 2, 3]
+
+    SESSION NOTES:
     {notes_json_str}
-    
-    Return ONLY a JSON list...
-    """
+
+    JSON list only:"""
 
 
 # ============================================================================
@@ -602,8 +611,15 @@ def compute_metrics(step_rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
     # TODO ── your implementation here ──────────────────────────────────────
     # Step 1: extract true_scores and pred_scores as lists from step_rows.
-    true_scores = [int(row["true_score"]) for row in step_rows]
-    pred_scores = [int(row["estimated_score"]) for row in step_rows]
+    # Filter out invalid scores (only keep 1-4)
+    valid_scores_set = set((1, 2, 3, 4))
+    filtered_rows = [
+        row for row in step_rows
+        if int(row["true_score"]) in valid_scores_set and int(row["estimated_score"]) in valid_scores_set
+    ]
+    
+    true_scores = [int(row["true_score"]) for row in filtered_rows]
+    pred_scores = [int(row["estimated_score"]) for row in filtered_rows]
     
     if not true_scores:
         return {
@@ -720,14 +736,19 @@ def print_evaluation(results: Dict[str, Any]) -> None:
 
 def run_test_pipeline(config: Q1ALabeledConfig) -> List[Dict[str, Any]]:
     """Run the Q1 pipeline on labeled test data."""
-    test_data = load_json(config.test_path)
+    import os
+    if os.path.exists(config.evaluated_output_path):
+        print(f"Loading existing scored data from {config.evaluated_output_path}")
+        scored_test_data = load_json(config.evaluated_output_path)
+    else:
+        test_data = load_json(config.test_path)
 
-    scored_test_data = score_dataset(
-        data=test_data,
-        config=config,
-        progress_desc="Scoring labeled clients",
-    )
-    save_json(scored_test_data, config.evaluated_output_path)
+        scored_test_data = score_dataset(
+            data=test_data,
+            config=config,
+            progress_desc="Scoring labeled clients",
+        )
+        save_json(scored_test_data, config.evaluated_output_path)
 
     results = evaluate_predictions(config)
     print_evaluation(results)

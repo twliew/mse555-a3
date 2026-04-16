@@ -1,0 +1,6 @@
+Waitlist capacity summary
+=======================
+Total waitlist clients: 35
+Baseline capacity (6 sessions/client): 210
+Policy capacity (predicted Q* per client): 244
+Sessions saved vs baseline: -34

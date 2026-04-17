@@ -504,33 +504,6 @@ def call_llm(prompt: str) -> str:
     )
     return (resp.choices[0].message.content or "").strip()
 
-    # ── Option B: Anthropic (Claude) ────────────────────────────────────────
-    # import os
-    # import anthropic
-    #
-    # client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-    # resp = client.messages.create(
-    #     model="claude-sonnet-4-6",
-    #     max_tokens=1024,
-    #     messages=[{"role": "user", "content": prompt}],
-    # )
-    # return resp.content[0].text.strip()
-
-    # ── Option C: Google Gemini ──────────────────────────────────────────────
-    # import os
-    # from google import genai
-    
-    # client = genai.Client(api_key="AIzaSyAyX35T577mFxGQ9KQe9oJ_mD_ZsSU5nmQ")
-    # resp = client.models.generate_content(
-    #     model="gemini-2.0-flash",
-    #     contents=prompt,
-    # )
-    # return resp.text.strip()
-
-    # # TODO ── uncomment one option above, then delete this line ─────────────
-    # raise NotImplementedError("Implement call_llm() by uncommenting one option above")
-
-
 # ============================================================================
 # CLIENT-LEVEL SCORING
 # ============================================================================
@@ -582,9 +555,9 @@ def get_validated_vector_from_llm(prompt, expected_length, config, client_id):
             return estimated_vector
         print(f"Invalid response for {client_id}, attempt {attempt}: {repr(raw_response)}")
 
-    # Instead of raising, return a fallback vector of all 1s
+    # Added this so instead of raising, it returns a fallback vector of all 1s
     print(f"WARNING: Using fallback vector for {client_id}")
-    return [1] * expected_length  # or skip by returning []
+    return [1] * expected_length  
 
 
 def score_client_record(
@@ -639,7 +612,7 @@ def score_dataset(
         scored_record = score_client_record(client_record, config)
         scored.append(scored_record)
 
-        # --- ADDED THIS LINE ---
+        # Added this line to avoid hitting rate limits
         time.sleep(12)
 
     return scored
@@ -705,7 +678,6 @@ def compute_metrics(step_rows: List[Dict[str, Any]]) -> Dict[str, Any]:
             "quadratic_weighted_kappa": 0.0,
         }
 
-    #
     # Step 2: compute your chosen metric(s).
     n = len(true_scores)
     exact_matches = sum(
@@ -760,7 +732,6 @@ def compute_metrics(step_rows: List[Dict[str, Any]]) -> Dict[str, Any]:
         else 1.0
     )
 
-    #
     # Step 3: return a dict, e.g.:
     #   return {
     #       "metricA": ...,

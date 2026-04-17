@@ -165,7 +165,6 @@ def print_feature_insights(data, separation_scores):
 
 # Part B: Train parametric and non-parametric classifiers
 def prepare_model_data(data):
-    """Prepare intake feature matrix and cluster labels for classification."""
     features = ['age_years', 'complexity_score', 'gender', 'referral_reason']
     X = pd.get_dummies(data[features], drop_first=True)
     y = data['cluster']
